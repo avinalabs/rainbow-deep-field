@@ -174,7 +174,7 @@
   }
 
   function angLerp(a, b, w) {
-    var d = ((b - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    var d = RDF.angDiff(b, a);
     return a + d * w;
   }
 

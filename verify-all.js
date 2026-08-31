@@ -509,6 +509,100 @@ async function run(view) {
     (everyDoor.total - everyDoor.bad.length) + '/' + everyDoor.total +
     (everyDoor.bad.length ? ' — failed: ' + everyDoor.bad.join(', ') : ''));
 
+  /* -------------------------------------------------------------- traffic */
+
+  const ships = await page.evaluate(async () => {
+    const e = window.__E;
+    if (e.pocket) { e.pocket.left = 0; for (let i = 0; i < 40; i++) { e.update(1 / 60); e.draw(); } }
+    e.warp(0, 60000);
+    e.ships.list.length = 0; e.ships.seen = 0; e.ships.next = 0.2;
+
+    // ten simulated minutes of the field, to see how often one goes past
+    let peak = 0;
+    for (let i = 0; i < 60 * 600; i++) {
+      e.ships.update(1 / 60, e);
+      peak = Math.max(peak, e.ships.list.length);
+    }
+    const perTenMin = e.ships.seen;
+
+    // one on screen, drawn, and confirm nothing throws
+    e.ships.list.length = 0;
+    const s = e.ships.spawn(e);
+    s.x = e.W / 2; s.y = e.H / 2; s.life = 4; s.vx = 0; s.vy = 0;
+    for (let i = 0; i < 5; i++) e.draw();
+    const onScreen = e.ships.list.length === 1;
+
+    // and none inside a pocket, because that is not this sky
+    window.RDF.pocket('prism');
+    for (let i = 0; i < 20; i++) { e.update(1 / 60); e.draw(); }
+    const before = e.ships.list.length;
+    e.ships.next = 0;
+    for (let i = 0; i < 120; i++) e.ships.update(1 / 60, e);
+    const spawnedInPocket = e.ships.list.length > before;
+    if (e.pocket) { e.pocket.left = 0; for (let i = 0; i < 50; i++) { e.update(1 / 60); e.draw(); } }
+    e.ships.list.length = 0;
+
+    return { perTenMin, peak, onScreen, spawnedInPocket };
+  });
+  A('ships pass by now and then', ships.perTenMin >= 4 && ships.perTenMin <= 30,
+    ships.perTenMin + ' in ten minutes');
+  A('never more than a couple at once', ships.peak <= 2, 'peak ' + ships.peak);
+  A('one draws without complaint', ships.onScreen);
+  A('and none turn up inside a pocket', ships.spawnedInPocket === false);
+
+  const deterministic = await page.evaluate(() => {
+    // the same seed must give the same traffic, like everything else here
+    const mk = () => {
+      const s = new window.RDF.Ships();
+      const fake = { W: 1280, H: 800, cam: { x: 0, y: 0 }, zEff: 0.5, pocket: null, reduceMotion: false };
+      const seq = [];
+      for (let i = 0; i < 60 * 400; i++) {
+        s.update(1 / 60, fake);
+        if (s.list.length) seq.push(Math.round(s.list[s.list.length - 1].y));
+      }
+      return seq.slice(0, 40).join(',');
+    };
+    return mk() === mk();
+  });
+  A('the same sky gives the same traffic', deterministic === true);
+
+  /* ---------------------------------------------------- resetting scores */
+
+  const reset = await page.evaluate(async () => {
+    const e = window.__E;
+    window.RDF.store.pocketScore('prism', 1234);
+    window.RDF.store.chase(9876);
+    const before = window.RDF.store.pocketBest('prism').best;
+    const found = window.RDF.store.discovered();
+
+    document.getElementById('btn-help').click();
+    await new Promise(r => setTimeout(r, 250));
+    const btn = document.getElementById('btn-reset');
+    btn.click();                                   // arms it
+    await new Promise(r => setTimeout(r, 120));
+    const armed = btn.textContent;
+    const stillThere = window.RDF.store.pocketBest('prism').best;
+    btn.click();                                   // confirms
+    await new Promise(r => setTimeout(r, 200));
+    const after = window.RDF.store.pocketBest('prism').best;
+    const said = (document.getElementById('reset-said') || {}).textContent;
+    document.getElementById('help').querySelector('.close').click();
+    await new Promise(r => setTimeout(r, 250));
+    return {
+      before, stillThere, after, armed, said,
+      foundBefore: found, foundAfter: window.RDF.store.discovered(),
+      doorsFresh: (e.sings || []).every(s => !s.done)
+    };
+  });
+  A('there is a way to clear your scores', reset.before === 1234);
+  A('one press only arms it', /sure/i.test(reset.armed) && reset.stillThere === 1234,
+    JSON.stringify(reset.armed));
+  A('a second press clears them', reset.after === 0, reset.said);
+  A('and it leaves the rainbows you have read alone',
+    reset.foundAfter === reset.foundBefore,
+    reset.foundBefore + ' found before, ' + reset.foundAfter + ' after');
+  A('the doors go back to being new', reset.doorsFresh);
+
   /* ------------------------------------------------------------ resizing */
 
   const resized = await page.evaluate(async () => {
@@ -539,13 +633,16 @@ async function run(view) {
   A('progress is stored locally', persisted.keys > 0 && persisted.found > 0,
     persisted.keys + ' keys, ' + persisted.found + ' found');
 
+  // the reset above cleared the bests on purpose, so put one back to prove it
+  // is the storage that survives a reload rather than a leftover value
+  await page.evaluate(() => window.RDF.store.pocketScore('prism', 777));
   const reload = await page.reload().then(() =>
     page.waitForFunction(() => window.RDF && window.RDF.film, null, { timeout: 25000 }))
     .then(() => page.evaluate(() => ({
       found: window.RDF.store.discovered(),
       best: window.RDF.store.pocketBest('prism').best
     })));
-  A('and survives a reload', reload.found > 0 && reload.best > 0,
+  A('and survives a reload', reload.found > 0 && reload.best === 777,
     reload.found + ' found, prism best ' + reload.best);
 
   A('no runtime errors in the whole pass', errs.length === 0,

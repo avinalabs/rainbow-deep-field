@@ -59,6 +59,37 @@
   RDF.prng = prng;
   RDF.shortId = shortId;
   RDF.clamp = clamp;
+  /* The signed shortest way round from b to a, always in [-PI, PI].
+
+     This replaces an idiom that was used in five places here and is correct
+     only while the difference stays inside about +/-2PI:
+
+       ((a - b + Math.PI * 3) % TAU) - Math.PI
+
+     JavaScript's % keeps the sign of its dividend, so once a - b drops below
+     -3PI the modulo returns a negative number and the result lands outside
+     [-PI, PI] — permanently, for a value that only grows.
+
+     That is not theoretical. The Pulsar's beam angle accumulates without bound,
+     so roughly eleven seconds into a sixty-second run the "are you standing in
+     the beam" test stopped being able to return true, and the beam spent the
+     remaining forty-five seconds as decoration. The mouse's heading and the
+     cat's heading in pilot mode accumulate the same way. */
+  var TAU2 = Math.PI * 2;
+  RDF.angDiff = function (a, b) {
+    var d = (a - b) % TAU2;
+    if (d > Math.PI) d -= TAU2;
+    else if (d < -Math.PI) d += TAU2;
+    return d;
+  };
+  /** Keep an accumulating heading inside [-PI, PI] so it never drifts off. */
+  RDF.wrapAngle = function (a) {
+    a = a % TAU2;
+    if (a > Math.PI) a -= TAU2;
+    else if (a < -Math.PI) a += TAU2;
+    return a;
+  };
+
   RDF.lerp = lerp;
   RDF.smoothstep = smoothstep;
   RDF.easeOutCubic = easeOutCubic;

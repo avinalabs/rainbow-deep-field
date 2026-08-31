@@ -250,9 +250,9 @@
       }
     }
 
-    var diff = ((want - this.dir + Math.PI * 3) % TAU) - Math.PI;
+    var diff = RDF.angDiff(want, this.dir);
     var turn = TURN * (this.juke > 0 ? 2.4 : 1);   // it snaps into a break
-    this.dir += RDF.clamp(diff, -turn * dt, turn * dt);
+    this.dir = RDF.wrapAngle(this.dir + RDF.clamp(diff, -turn * dt, turn * dt));
 
     // flat out well before you are on top of it, not at the last moment, and a
     // scamper on the way out of a break so the break actually buys it something

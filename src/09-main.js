@@ -106,6 +106,10 @@
     /* The thing at the middle. Fall in and it puts you down somewhere else in
        the arms — which is the answer to flying out past the rim and finding
        nothing in any direction. */
+    /* Traffic. Something crosses the view every minute or so, a long way off,
+       going somewhere else. Purely ambient — see <11-ships.js>. */
+    engine.ships = new RDF.Ships();
+
     engine.hole = new RDF.Hole(world);
     engine.hole.onTransit = function (n) {
       hint(n === 1
@@ -406,6 +410,35 @@
     });
 
     $('btn-help').addEventListener('click', function () { open('help'); });
+
+    /* Two presses, because it cannot be undone and a stray tap in a help sheet
+       should not cost somebody their best minute in twenty games. */
+    var resetArmed = 0;
+    var resetBtn = $('btn-reset');
+    if (resetBtn) resetBtn.addEventListener('click', function () {
+      var now = Date.now();
+      if (now - resetArmed > 6000) {
+        resetArmed = now;
+        resetBtn.textContent = 'Sure? Press again';
+        $t('reset-said', 'This clears every best score. It cannot be undone.');
+        setTimeout(function () {
+          if (Date.now() - resetArmed >= 5900) {
+            resetBtn.textContent = 'Reset my scores';
+            $t('reset-said', '');
+          }
+        }, 6000);
+        return;
+      }
+      resetArmed = 0;
+      var ok = RDF.store.resetScores();
+      resetBtn.textContent = 'Reset my scores';
+      $t('reset-said', ok ? 'Cleared. Every door is new again.' : 'Could not clear them here.');
+      if (engine && engine.sings) {
+        // the doors reach further for a player who has not been through them,
+        // and the wide view labels them — both read the store, so refresh both
+        for (var i = 0; i < engine.sings.length; i++) engine.sings[i].done = false;
+      }
+    });
     $('btn-leave').addEventListener('click', openCompose);
 
     $('btn-sound').addEventListener('click', function () {

@@ -82,8 +82,52 @@ const url = 'file://' + path.join(__dirname, 'docs', 'index.html');
     document.getElementById('pocket').querySelector('.pocket-note').textContent);
   check(/dazzled/.test(note) || sawDazzle, 'the note names what happened', JSON.stringify(note));
 
+  /* Every time, not just at the start.
+
+     The beam angle accumulates without bound, and the "are you in the beam"
+     test used ((a - b + 3PI) % TAU) - PI — which JavaScript evaluates with the
+     sign of its dividend, so once the beam passed about 3PI the expression
+     could never fall inside the beam width again. Measured: three hits in the
+     first stretch of a run and then nothing, with the beam sweeping harmlessly
+     through the cat for the remaining forty-five seconds.
+
+     This parks the cat in the beam's path for a whole run and counts. */
+  const sweep = await page.evaluate(async () => {
+    const { engine, step } = window.RDF.film;
+    if (engine.pocket) { engine.pocket.left = 0; for (let i = 0; i < 40; i++) step(1 / 60); }
+    window.RDF.pocket('pulsar');
+    const hits = [];
+    let wall = 0;
+    for (let i = 0; i < 60 * 90; i++) {
+      const q = engine.pocket; if (!q) break;
+      const w = q.toWorld(600, 0);                    // hold still in the sweep
+      engine.cat.x = w.x; engine.cat.y = w.y; engine.cat.vx = 0; engine.cat.vy = 0;
+      const before = q.left;
+      step(1 / 60);
+      wall += 1 / 60;
+      const after = engine.pocket ? engine.pocket.left : 0;
+      if (before - after - 1 / 60 > 0.5) hits.push(+wall.toFixed(1));
+    }
+    const gaps = hits.slice(1).map((t, i) => +(t - hits[i]).toFixed(1));
+    return { hits, gaps, ended: +wall.toFixed(1), last: hits[hits.length - 1] };
+  });
+  check(sweep.hits.length >= 6, 'the beam catches you again and again',
+    sweep.hits.length + ' times in one run');
+  /* The run ends early precisely BECAUSE it keeps landing — eight hits is
+     thirty-four seconds off a sixty-second clock — so the test is that the
+     beam is still catching at the moment the run runs out, not that it is
+     still catching at some fixed wall-clock time. */
+  check(sweep.ended - sweep.last < 5, 'right up until the clock runs out',
+    'last hit at ' + sweep.last + 's, run ended at ' + sweep.ended + 's');
+  check(sweep.gaps.every(g => g < 6), 'at every sweep, evenly',
+    'gaps: ' + sweep.gaps.join(', ') + 's');
+
   // and the run still ends cleanly
-  await page.evaluate(() => { window.RDF.film.engine.pocket.left = 0.4; });
+  await page.evaluate(() => {
+    const e = window.RDF.film.engine;
+    if (!e.pocket) { e.singCool = 0; window.RDF.pocket('pulsar'); window.RDF.film.step(1 / 60); }
+    e.pocket.left = 0.4;
+  });
   await page.waitForTimeout(2500);
   const after = await page.evaluate(() => !!window.RDF.film.engine.pocket);
   check(!after, 'the run ends and returns you to the field');

@@ -73,7 +73,17 @@ const check = (ok, label, detail) => (ok ? pass : fail).push(label + (detail ? `
   check(/Take me to it/i.test(cta), 'arrival changes the button', cta.trim());
 
   await p2.click('#btn-begin');
-  await p2.waitForTimeout(6500);   // let the autopilot fly there
+  /* Wait for the arrival, not for a stopwatch.
+
+     This used to sleep 6500ms and hope. The flight takes about 435 frames, so
+     it needed better than sixty frames a second to pass — on a loaded machine
+     it simply did not, and the suite failed for reasons that had nothing to do
+     with the site. Poll the actual condition with a generous ceiling. */
+  await p2.waitForFunction(want => {
+    const { engine, world } = window.RDF.film;
+    const c = world.comets.filter(x => x.text === want)[0];
+    return !!(c && engine.focused && engine.focused.id === c.id);
+  }, text, { timeout: 30000 }).catch(() => { /* the check below reports it */ });
 
   const arrived = await p2.evaluate(wantedText => {
     const { engine, world } = window.RDF.film;

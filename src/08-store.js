@@ -16,7 +16,13 @@
   var LS_CHASE = 'rdf.chase.v1';
   var LS_LIT = 'rdf.lit.v1';
   var LS_LAST = 'rdf.last.v1';
-  var LS_POCKET = 'rdf.pocket.v1';
+  /* v2 rather than v1 on purpose. Two things changed under these numbers: the
+     Pulsar's beam went from silently harmless after eleven seconds to landing
+     on every sweep, and a phone's arena and pace were both rebuilt. Bests set
+     against the old behaviour are not comparable to bests set against this one,
+     so everybody starts level once. */
+  var LS_POCKET = 'rdf.pocket.v2';
+  var LS_POCKET_OLD = 'rdf.pocket.v1';
   var COOLDOWN_MS = 3 * 60 * 1000;
 
   function lsGet(k, d) {
@@ -481,6 +487,21 @@
 
   function myMessages() { return lsGet(LS_MINE, []); }
 
+  /* Wipe the scores and nothing else.
+
+     Deliberately narrow: it clears pocket bests and the chase record, and
+     leaves every rainbow you have read, your line across the galaxy and
+     anything you have sent completely alone. Somebody clearing a leaderboard
+     is not asking to un-read four hundred strangers' messages. */
+  function resetScores() {
+    try {
+      localStorage.removeItem(LS_POCKET);
+      localStorage.removeItem(LS_POCKET_OLD);
+      localStorage.removeItem(LS_CHASE);
+      return true;
+    } catch (e) { return false; }
+  }
+
   RDF.store = {
     load: load,
     submit: submit,
@@ -495,6 +516,7 @@
     foundRare: foundRare,
     isFound: isFound,
     chase: chase,
+    resetScores: resetScores,
     pocketBest: pocketBest,
     pocketScore: pocketScore,
     pocketsSeen: pocketsSeen,

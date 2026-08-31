@@ -137,7 +137,7 @@ function check(name, ok, detail) {
     }
     return {
       probe, share: inside / total, home: h, r, hits,
-      offBottom: Math.round(e.H - (h.y + r)), offRight: Math.round(e.W - (h.x + r))
+      offBottom: +(e.H - (h.y + r)).toFixed(1), offRight: +(e.W - (h.x + r)).toFixed(1)
     };
   });
 
@@ -150,8 +150,16 @@ function check(name, ok, detail) {
   check('and it touches none of the buttons', geom.hits.length === 0,
     geom.hits.length ? 'overlaps ' + geom.hits.join(', ') : 'clear');
   check('it sits in the bottom-right corner',
-    geom.offBottom >= 0 && geom.offBottom < 90 && geom.offRight >= 0 && geom.offRight < 60,
+    geom.offBottom >= 0 && geom.offBottom < 110 && geom.offRight >= 0 && geom.offRight < 80,
     geom.offBottom + 'px from the bottom, ' + geom.offRight + 'px from the right');
+  /* The real requirement, which the position alone does not capture: a full
+     push toward the bottom-right corner has to land on glass. The inset was
+     18px against a 34px radius, so it did not — up-left was easy and down-right
+     ran off the edge, which is what a thumb actually reports. */
+  check('every direction is reachable without leaving the screen',
+    geom.offBottom >= geom.r - 0.5 && geom.offRight >= geom.r - 0.5,
+    'radius ' + Math.round(geom.r) + ', clearance ' + geom.offRight + ' right / ' +
+    geom.offBottom + ' bottom');
 
   /* ---- and it holds still ----
 

@@ -232,7 +232,7 @@
       // caught in the beam? two arms, opposite each other
       var lit = false;
       for (var k = 0; k < 2; k++) {
-        var d = Math.abs(((ca - (p.beam + k * Math.PI) + Math.PI * 3) % TAU) - Math.PI);
+        var d = Math.abs(RDF.angDiff(ca, p.beam + k * Math.PI));
         if (d < 0.16) lit = true;
       }
       if (lit && p.dazzle <= 0) {

@@ -308,3 +308,9 @@ h1 + .lede.big,.lede.big{font-size:19px;line-height:1.5}
   body.is-touch .hint{max-width:min(300px,calc(100vw - 130px));
     transform:translateX(calc(-50% - 30px))}
 }
+
+/* The scores reset, in the help sheet. Quiet — it is a thing you go looking
+   for, not a thing that should catch your eye while you are reading. */
+.reset-row{display:flex;align-items:center;gap:12px;margin-top:14px}
+.reset-row .chip{cursor:pointer}
+#reset-said{color:var(--dim);transition:opacity .3s}

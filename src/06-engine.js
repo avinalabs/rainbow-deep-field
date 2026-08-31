@@ -306,7 +306,19 @@
      centred and the stick is in the corner; they do not collide. */
   Engine.prototype.stickHome = function () {
     var r = this.stickRadius();
-    return { x: this.W - r - 18, y: this.H - r - 22 - (this.safeBottom || 0) };
+    /* The inset has to be bigger than the radius, or the corner of the stick is
+       off the edge of the phone.
+
+       This sat 18px from the right and 22px from the bottom with a 34px radius,
+       which reads as neatly tucked into the corner and plays badly: pushing
+       down-and-right means dragging your thumb 34px past the centre, and the
+       glass runs out at 18. Up-left was easy and down-right was not, which is
+       exactly what was reported. So the rim now clears the edge on every side,
+       with a little extra at the bottom where a thumb also has to avoid the
+       home gesture. */
+    var side = r * 2;
+    var below = r * 2 + 12 + (this.safeBottom || 0);
+    return { x: this.W - side, y: this.H - below };
   };
 
   /** Generous, because thumbs are imprecise — but bounded, so the rest of the
@@ -655,7 +667,7 @@
 
     var sp = Math.hypot(cat.vx, cat.vy);
     if (this.flight !== 'pilot' && sp > 1) cat.dir = Math.atan2(cat.vy, cat.vx);
-    var dd2 = ((cat.dir - prevDir + Math.PI * 3) % TAU) - Math.PI;
+    var dd2 = RDF.angDiff(cat.dir, prevDir);
     cat.turn += (dd2 / Math.max(dt, 0.0001) - cat.turn) * Math.min(1, dt * 8);
     cat.bank += (RDF.clamp(cat.turn * 0.10, -0.55, 0.55) - cat.bank) * Math.min(1, dt * 7);
     var cruise = SCREEN_SPEED / cam.z;
@@ -689,6 +701,7 @@
     }
 
     if (this.hole) this.hole.update(dt, this);
+    if (this.ships) this.ships.update(dt, this);
     if (this.mouse) this.mouse.update(dt, this);
     if (this.sings) {
       var door = RDF.pockets.stepSings(this.sings, dt, this);
@@ -724,11 +737,11 @@
     var cat = this.cat;
     if (want > 0.001) {
       var target = Math.atan2(ty, tx);
-      var diff = ((target - cat.dir + Math.PI * 3) % TAU) - Math.PI;
+      var diff = RDF.angDiff(target, cat.dir);
       // turning gets wider the faster you are going, so speed costs you agility
       var rate = RDF.lerp(PILOT.turn, PILOT.turnBoost, this.boost);
       var step = RDF.clamp(diff, -rate * dt, rate * dt);
-      cat.dir += step;
+      cat.dir = RDF.wrapAngle(cat.dir + step);
       var ux = Math.cos(cat.dir), uy = Math.sin(cat.dir);
       // no thrust while the nose is still swinging round — that is what stops
       // it feeling like a mouse cursor and starts it feeling like a ship
@@ -1110,6 +1123,7 @@
     if (this.couriers) this.couriers.drawAurora(ctx, W, H, this.t);
     this._drawStars(ctx, z);
     this._drawCore(ctx, z);
+    if (this.ships) { ctx.save(); this.ships.draw(ctx, this); ctx.restore(); }
     if (this.hole) this.hole.draw(ctx, this, z);
     this._drawDust(ctx, z);
     this._drawConstellation(ctx, z);
