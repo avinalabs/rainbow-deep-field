@@ -1,0 +1,29 @@
+node_modules/
+frames-wide/
+frames-tall/
+shots/
+out/
+score.wav
+cards/
+
+# Build output. `node build.js` writes both dist/ and docs/, and docs/index.html
+# is the byte-identical copy GitHub Pages actually serves — so committing dist/
+# as well just puts a second half-megabyte of generated file in the repo and
+# invites somebody to edit the wrong one.
+dist/
+
+# Working documents — these are correspondence, not the project. They contain
+# submission details, launch strategy and personal information, and must not be
+# published. Kept out of the repo deliberately.
+SUBMISSION.md
+POSTS.md
+LAUNCH.md
+DEPLOY.md
+SUPABASE.md
+PROJECT_STATUS.md
+launch-plan.html
+seeds-archive/
+
+# Packaged deliverables, not source.
+deliver/
+*.zip

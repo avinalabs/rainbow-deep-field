@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<title>Rainbow Deep Field</title>
+<meta name="description" content="Every rainbow out here is one kind sentence, left by a stranger, for whoever finds it. Fly out and look.">
+<meta name="theme-color" content="#03030a">
+<meta property="og:title" content="Rainbow Deep Field">
+<meta property="og:description" content="Every rainbow out here is one kind sentence somebody left for a stranger. Fly out and find one.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<style>/*CSS*/</style>
+</head>
+<body>
+
+<canvas id="sky" aria-label="A field of rainbow comets. Each one is a message."></canvas>
+
+<!-- ————————————————————————————— heads-up display —————————————————————————— -->
+<header id="hud" class="hud hidden">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <span class="wordmark">Rainbow Deep&nbsp;Field</span>
+  </div>
+  <div class="hud-right">
+    <button id="btn-sound" class="icon" title="Sound" aria-label="Toggle sound">
+      <span class="ico-off">♪̸</span><span class="ico-on">♪</span>
+    </button>
+    <button id="btn-tilt" class="icon hidden" title="Fly by tilting the phone" aria-label="Fly by tilting the phone">⌾</button>
+    <button id="btn-wide" class="icon" title="See the whole field" aria-label="See the whole field">⤢</button>
+    <button id="btn-help" class="icon" title="How this works" aria-label="How this works">?</button>
+  </div>
+</header>
+
+<div id="stats" class="stats hidden">
+  <span><b id="stat-total">—</b> rainbows adrift</span>
+  <span class="dot">·</span>
+  <span><b id="stat-found">0</b> found by you</span>
+  <span class="rare hidden"><span class="dot">·</span><b id="stat-rare">0</b> brilliant</span>
+</div>
+
+<!-- what the courier beside you is carrying. Ordered before the milestone so
+     the milestone can step down out of its way when both are up at once. -->
+<div id="carry" class="carry">
+  <span class="carry-who"><img id="carry-cat" alt="" width="34"><b class="carry-head"></b></span>
+  <p class="carry-text"></p>
+</div>
+
+<div id="milestone" class="milestone">
+  <b></b>
+  <span></span>
+</div>
+
+<!-- ————————————————————————————— focused message bar ——————————————————————— -->
+<div id="bar" class="bar hidden">
+  <button id="btn-light" class="chip" title="Light this one up">
+    <span class="heart">♡</span><span id="light-n"></span>
+  </button>
+  <button id="btn-share" class="chip">Share this one</button>
+  <button id="btn-report" class="chip subtle" title="Report">⚑</button>
+</div>
+
+<!-- ————————————————————————————— leave one ————————————————————————————————— -->
+<button id="btn-leave" class="leave hidden">Leave one</button>
+
+<!-- the chase clock -->
+<div id="chase" class="chase">
+  <b class="chase-time">0.0</b>
+  <span class="chase-note">a mouse has your message — follow the red arrow</span>
+</div>
+
+<!-- inside one of the seven -->
+<div id="pocket" class="pocket">
+  <span class="pocket-name"></span>
+  <b class="pocket-score">0</b>
+  <span class="pocket-clock"><i></i></span>
+  <span class="pocket-note"></span>
+</div>
+
+<div id="hint" class="hint hidden"></div>
+
+<!-- ————————————————————————————— controls ————————————————————————————————— -->
+<!-- Keyboard flying was the best-kept secret in the build: it only appeared in
+     the help sheet, which nobody opens. It gets its own corner now, and leaves
+     once you have clearly got the hang of it. -->
+<div id="keys" class="keys hidden" aria-hidden="true">
+  <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><i>/</i><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span><em>fly</em>
+  <span><kbd>shift</kbd></span><em>boost</em>
+  <span><kbd>hold</kbd></span><em>fly to the pointer</em>
+  <span><kbd>scroll</kbd></span><em>zoom</em>
+</div>
+
+<!-- ————————————————————————————— intro ———————————————————————————————————— -->
+<div id="intro" class="sheet open">
+  <div class="sheet-inner intro-inner">
+    <p class="eyebrow">Written by strangers, for strangers</p>
+    <h1>Rainbow<br>Deep Field</h1>
+    <p class="lede strong big">Every rainbow out here is one kind thing somebody wrote for a stranger to find.</p>
+    <p class="lede">Fly around. Get close to a rainbow and it opens, and you can read what they said. Then leave one of your own — it stays out here for whoever comes next.</p>
+    <p class="lede">No account, nothing to install. Give it a minute and see what you find.</p>
+    <button id="btn-begin" class="cta">Start flying</button>
+    <p class="micro" id="controls-hint"></p>
+    <p class="micro fine">Named after the Hubble Deep Field — ten days spent staring at a patch of sky chosen because it looked empty. It wasn't. It held ten thousand galaxies.</p>
+  </div>
+</div>
+
+<!-- ————————————————————————————— compose —————————————————————————————————— -->
+<div id="compose" class="sheet">
+  <div class="sheet-inner">
+    <button class="close" data-close="compose" aria-label="Close">×</button>
+    <p class="eyebrow">Leave one</p>
+    <h2>Say something kind to somebody you will never meet.</h2>
+    <p class="lede small">It gets split into light and sent out. Your words decide what the rainbow looks like — watch.</p>
+
+    <div class="preview">
+      <canvas id="prev" width="1100" height="150"></canvas>
+      <div class="preview-meta">
+        <span id="prev-nm">—</span>
+        <span id="prev-cls">awaiting light</span>
+      </div>
+    </div>
+
+    <textarea id="msg" maxlength="160" rows="3" placeholder="you're doing better than you think you are"></textarea>
+    <div class="compose-foot">
+      <span id="count" class="micro">0 / 160</span>
+      <span id="err" class="err"></span>
+      <button id="btn-send" class="cta small" disabled>Send it out</button>
+    </div>
+    <p class="micro fine">Anonymous. No accounts, nothing stored about you. Unkind things don't make it out of the atmosphere.</p>
+  </div>
+</div>
+
+<!-- ————————————————————————————— sent ————————————————————————————————————— -->
+<div id="sent" class="sheet">
+  <div class="sheet-inner">
+    <button class="close" data-close="sent" aria-label="Close">×</button>
+    <p class="eyebrow">Away it goes</p>
+    <h2>It's out there now.</h2>
+    <div class="card-wrap"><canvas id="card" width="1200" height="630"></canvas></div>
+    <p class="lede small">This link drops anyone straight onto your rainbow, wherever it is in the field.</p>
+    <div class="linkrow">
+      <input id="permalink" readonly>
+      <button id="btn-copy" class="cta small">Copy</button>
+    </div>
+    <div class="linkrow">
+      <button id="btn-dl" class="ghost">Download the card</button>
+      <button id="btn-goto" class="ghost">Fly to it</button>
+    </div>
+  </div>
+</div>
+
+<!-- ————————————————————————————— help ————————————————————————————————————— -->
+<div id="help" class="sheet">
+  <div class="sheet-inner">
+    <button class="close" data-close="help" aria-label="Close">×</button>
+    <p class="eyebrow">How to play</p>
+    <h2>It's three things.</h2>
+    <ol class="how">
+      <li><b>Fly.</b> <span class="only-touch">Put your thumb on the circle in the bottom right and push the way you want to go — or just hold your thumb anywhere on the screen and she flies to it. Push all the way, or keep holding, to speed up. Pinch to zoom.</span><span class="only-mouse">Hold the mouse down and she flies that way. Keep holding to go faster. <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> works too. Scroll to zoom.</span></li>
+      <li><b>Read.</b> Get close to any rainbow and it opens on its own. No clicking.</li>
+      <li><b>Leave one.</b> Write one kind sentence. It turns into a rainbow that nobody else has, and it stays out here.</li>
+    </ol>
+    <p class="lede small">That's all you need. Everything below is extra, and you'll find most of it by accident.</p>
+
+    <hr>
+    <p class="eyebrow">If you want to know more</p>
+
+    <p class="lede small"><b>The colours mean something.</b> Your words are turned into light. The coloured bar under each message is that sentence split into a spectrum, and the dark lines running through it are its actual letters. Type the same words twice and you get the same rainbow — always, on any device.</p>
+
+    <p class="lede small"><b>Twenty places to play.</b> Scattered around are twenty coloured singularities. Fly into one and it drops you somewhere else for sixty seconds, with something different to do — sort light through a prism, hide from a pulsar's beam, ride a shockwave, hold three bodies in a line. Your best score in each is saved on your device. Nothing that happens in there can cost you anything out here.</p>
+
+    <p class="lede small"><b>Other cats.</b> Nine of them, each a different colour, each carrying somebody's sentence across the field. Fly alongside one for a moment and she'll give you what she's carrying. They aren't other players — nobody else is online — they're just delivering the post.</p>
+
+    <p class="lede small"><b>Your own line.</b> Every rainbow you read stays lit, joined up in the order you found them. Press <kbd>⤢</kbd> to pull right back and see the line you've drawn across the galaxy. It's yours; nobody else has that one.</p>
+
+    <p class="lede small"><b>The mouse.</b> Now and then a mouse turns up, steals a message nobody has read yet, and runs off with it. While it has it, that message is genuinely gone. Catch the mouse and you get it back. It's quick, it weaves, and it will dive down the black hole to lose you.</p>
+
+    <p class="lede small"><b>The middle.</b> There's a black hole at the centre, like there is in every real galaxy this size. It's the one thing you can see from anywhere, so head for it when you're lost. Fall in and it puts you back down somewhere else.</p>
+
+    <p class="lede small"><b>Tilt your phone.</b> The <kbd>⌾</kbd> button lets you fly by tilting instead. Whatever angle you're holding it at when you turn it on becomes level. Touching the screen always wins while your finger is down.</p>
+
+    <p class="lede small"><b>Rare ones.</b> About one message in forty comes out burning bright — a full, wide rainbow. They wear a halo and ring a high note, and a prism at the edge of the screen points toward the nearest one you haven't read.</p>
+
+    <p class="lede small"><b>Where they came from.</b> Each message says. <b>Founding</b> means it was written to open the field so it was never empty. Everything else carries the day a person left it.</p>
+
+    <p class="micro fine">Built for a hackathon. The cat is not that cat — she's ours, and she has a helmet.</p>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>/*JS*/</script>
+</body>
+</html>
