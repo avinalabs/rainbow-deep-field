@@ -603,25 +603,112 @@ async function run(view) {
     reset.foundBefore + ' found before, ' + reset.foundAfter + ' after');
   A('the doors go back to being new', reset.doorsFresh);
 
+  /* -------------------------------------------- the browser gets out of the way
+
+     Reported from Opera: the page zoomed, the controls stopped answering, and
+     a copy/paste bar kept appearing over the game. Three separate things — page
+     zoom, a stranded canvas, and the text-selection callout — and the middle
+     one was self-inflicted: once the canvas was pinned to an exact pixel size
+     for sharpness, measuring the canvas to decide its size became circular, so
+     a viewport change with no resize event left it stranded. */
+
+  const gestures = await page.evaluate(() => {
+    const cv = document.getElementById('sky');
+    const ctxEv = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    const selEv = new Event('selectstart', { bubbles: true, cancelable: true });
+    const e = window.__E;
+    const before = e.cam.zt;
+    cv.dispatchEvent(new WheelEvent('wheel', { deltaY: -500, ctrlKey: true, bubbles: true, cancelable: true }));
+    const afterCtrl = e.cam.zt;
+    cv.dispatchEvent(new WheelEvent('wheel', { deltaY: -500, bubbles: true, cancelable: true }));
+    const meta = (document.querySelector('meta[name=viewport]') || {}).content || '';
+    return {
+      contextMenu: !cv.dispatchEvent(ctxEv),
+      selection: !cv.dispatchEvent(selEv),
+      userSelect: getComputedStyle(cv).userSelect || getComputedStyle(cv).webkitUserSelect,
+      ctrlHeld: afterCtrl === before,
+      plainWorks: e.cam.zt !== afterCtrl,
+      noUserScale: /user-scalable=no/.test(meta) && /maximum-scale=1/.test(meta)
+    };
+  });
+  A('right-click menu is refused on the canvas', gestures.contextMenu);
+  A('and text selection with it', gestures.selection && gestures.userSelect === 'none',
+    gestures.userSelect);
+  A('ctrl-wheel does not fly the camera', gestures.ctrlHeld);
+  A('but a plain wheel still zooms the game', gestures.plainWorks);
+  A('pinch zoom is turned off', gestures.noUserScale);
+
+  const typable = await page.evaluate(async () => {
+    document.getElementById('btn-leave').click();
+    await new Promise(r => setTimeout(r, 400));
+    const m = document.getElementById('msg');
+    m.value = 'a kind sentence typed into the box';
+    m.dispatchEvent(new Event('input', { bubbles: true }));
+    m.focus(); m.setSelectionRange(2, 8);
+    const cs = getComputedStyle(m);
+    const out = {
+      userSelect: cs.userSelect || cs.webkitUserSelect,
+      selected: m.value.substring(m.selectionStart, m.selectionEnd),
+      sendEnabled: !document.getElementById('btn-send').disabled
+    };
+    document.getElementById('compose').querySelector('.close').click();
+    await new Promise(r => setTimeout(r, 300));
+    return out;
+  });
+  A('but you can still type and select in the message box',
+    typable.userSelect === 'text' && typable.selected === 'kind s' && typable.sendEnabled,
+    JSON.stringify(typable.selected));
+
+  const heals = await page.evaluate(async () => {
+    const cv = document.getElementById('sky'), e = window.__E;
+    // strand it the way a zoom with no resize event does
+    cv.style.width = '420px'; cv.style.height = '260px';
+    cv.width = 420; cv.height = 260; e.W = 420; e.H = 260;
+    const stranded = [Math.round(e.W), Math.round(e.H)];
+    await new Promise(r => setTimeout(r, 1500));   // no events at all
+    const de = document.documentElement.getBoundingClientRect();
+    return {
+      stranded,
+      healed: [Math.round(e.W), Math.round(e.H)],
+      viewport: [Math.round(de.width), Math.round(de.height)],
+      ratio: +(cv.width / cv.getBoundingClientRect().width).toFixed(3)
+    };
+  });
+  A('a stranded canvas repairs itself with no events',
+    heals.healed[0] === heals.viewport[0] && heals.healed[1] === heals.viewport[1],
+    heals.stranded.join('x') + ' → ' + heals.healed.join('x') +
+    ', viewport ' + heals.viewport.join('x'));
+  A('and comes back at an exact pixel ratio', Math.abs(heals.ratio - view.dsf) < 0.01,
+    'ratio ' + heals.ratio);
+
   /* ------------------------------------------------------------ resizing */
 
-  const resized = await page.evaluate(async () => {
-    const e = window.__E, cv = document.getElementById('sky');
-    const sizes = [];
-    for (const [w, h] of [[320, 568], [768, 1024], [1440, 900], [390, 844]]) {
-      cv.style.width = w + 'px'; cv.style.height = h + 'px';
-      e.resize();
-      e.update(1 / 60); e.draw();
-      const r = cv.getBoundingClientRect();
-      sizes.push({ w, h, ratio: +(cv.width / r.width).toFixed(3), W: Math.round(e.W) });
-    }
-    cv.style.width = ''; cv.style.height = '';
-    e.resize(); e.draw();
-    return sizes;
-  });
-  A('it survives every viewport it is resized to',
-    resized.every(s => Math.abs(s.ratio - resized[0].ratio) < 2 && s.W === s.w),
-    resized.map(s => s.w + '×' + s.h).join(', '));
+  /* Resize the real viewport, not the canvas. The canvas is pinned to an exact
+     pixel size now, so poking its style tells resize() nothing — the viewport
+     is the input, which is the entire point of the Opera fix. */
+  const resized = [];
+  for (const [w, h] of [[320, 568], [768, 1024], [1440, 900], [390, 844]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.waitForTimeout(350);
+    resized.push(await page.evaluate(() => {
+      const e = window.__E, cv = document.getElementById('sky');
+      const de = document.documentElement.getBoundingClientRect();
+      return {
+        w: Math.round(de.width), h: Math.round(de.height),
+        W: Math.round(e.W), H: Math.round(e.H),
+        ratio: +(cv.width / cv.getBoundingClientRect().width).toFixed(3),
+        dpr: e.dpr
+      };
+    }));
+  }
+  await page.setViewportSize(view.viewport);
+  await page.waitForTimeout(350);
+  A('it follows every viewport it is given',
+    resized.every(s => s.W === s.w && s.H === s.h),
+    resized.map(s => s.w + '×' + s.h + '→' + s.W + '×' + s.H).join(', '));
+  A('at an exact pixel ratio each time',
+    resized.every(s => Math.abs(s.ratio - s.dpr) < 0.01),
+    resized.map(s => s.ratio).join(', '));
 
   /* ------------------------------------------------------------- storage */
 

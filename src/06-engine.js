@@ -179,39 +179,61 @@
     this.cat.trail.length = 0;
   };
 
+  /* What the viewport actually is, measured off something that is not the
+     canvas.
+
+     This used to measure the canvas itself, which became circular the moment
+     the canvas started being pinned to an exact pixel size: a pinned element
+     cannot report that the window around it grew. Browser zoom does exactly
+     that — it changes the CSS viewport — and on a browser that does not fire a
+     resize event for it, the canvas stayed stranded at its old size while the
+     page around it moved. Reported from Opera: zoomed in, and then the buttons
+     no longer answered because they were nowhere near where they were drawn.
+
+     `documentElement` is the viewport by construction here (html is height:100%
+     and body does not scroll), and its bounding rect is fractional, which is
+     what the exact-ratio sizing below needs. */
+  Engine.prototype.viewportSize = function () {
+    var de = document.documentElement;
+    var r = de.getBoundingClientRect ? de.getBoundingClientRect() : null;
+    var w = (r && r.width) || de.clientWidth || window.innerWidth || 1;
+    var h = (r && r.height) || de.clientHeight || window.innerHeight || 1;
+    return { w: w, h: h };
+  };
+
   Engine.prototype.resize = function () {
     /* Phones are where the type is smallest and the screens are densest, and
        capping every device at 2× was quietly rendering a 3× phone's serif at
        two thirds of its real resolution — which is exactly what "a bit blurry"
        looks like. A narrow viewport has few enough CSS pixels that the extra
-       depth is affordable, and the quality governor is there if it is not. */
-    /* Measure in fractions, not integers.
+       depth is affordable, and the quality governor is there if it is not.
 
-       `clientWidth`/`clientHeight` are specified to return rounded integers.
-       iOS Safari's viewport is fractional almost all the time — it lands on
-       heights like 659.5 and 739.297 as the address bar slides — so sizing the
-       backing store from the rounded value gives a canvas whose pixel ratio is
-       3.0023 rather than 3. The browser then resamples every pixel on its way
-       to the screen, and everything drawn on it, text most visibly, goes soft.
-
-       That is the entire "text looks blurry on mobile" report, and it is why
-       raising the device pixel ratio did not fix it: the resample happens at
-       whatever ratio you pick. So: measure the real box, round the backing
-       store, and then pin the CSS size to exactly backing ÷ dpr so the ratio is
-       exact and no resample happens at all. */
-    var rect = this.canvas.getBoundingClientRect();
-    var wCss = rect.width || window.innerWidth;
-    var hCss = rect.height || window.innerHeight;
+       And measure in fractions, not integers. `clientWidth`/`clientHeight` are
+       specified to return rounded values, and a mobile viewport is fractional
+       almost all the time — it lands on heights like 659.5 and 739.297 as the
+       address bar slides. Sizing the backing store off the rounded number gives
+       a canvas whose pixel ratio is 3.0023 rather than 3, and the browser then
+       resamples every pixel on its way to the screen. That was the whole "text
+       looks blurry" report, and it is why raising the pixel ratio never helped.
+       So: measure the real box, round the backing store, and pin the CSS size
+       to exactly backing ÷ dpr so the ratio is exact. */
+    var vp = this.viewportSize();
+    var wCss = vp.w, hCss = vp.h;
 
     var want = wCss < 700 ? 3 : 2;
     if (this.dprCap) want = Math.min(want, this.dprCap);
     var dpr = Math.min(window.devicePixelRatio || 1, want);
-    this.dpr = dpr;
 
     var bw = Math.max(1, Math.round(wCss * dpr));
     var bh = Math.max(1, Math.round(hCss * dpr));
-    if (this.canvas.width !== bw) this.canvas.width = bw;
-    if (this.canvas.height !== bh) this.canvas.height = bh;
+
+    // nothing moved: don't touch the canvas, or observing our own writes turns
+    // into a loop
+    if (this.dpr === dpr && this.canvas.width === bw && this.canvas.height === bh) return;
+
+    this.dpr = dpr;
+    this.canvas.width = bw;
+    this.canvas.height = bh;
 
     var w = bw / dpr, h = bh / dpr;
     this.canvas.style.width = w + 'px';
@@ -222,6 +244,27 @@
        both hard to press and easy to leave the page with. */
     this.safeBottom = readSafeBottom();
     this.bloom = null;         // rebuilt at the new size on the next frame
+  };
+
+  /* Watch the viewport itself, rather than trusting events.
+
+     Browser zoom, a sidebar opening, a phone rotating, desktop window chrome
+     appearing — every one of these changes the CSS viewport, and not all of
+     them fire a resize event in every browser. A ResizeObserver on the element
+     that IS the viewport catches all of them, and the guard above makes a
+     no-op call free, so it can fire as often as it likes. */
+  Engine.prototype._watchViewport = function () {
+    var self = this;
+    if (window.ResizeObserver) {
+      try {
+        this._ro = new ResizeObserver(function () { self.resize(); });
+        this._ro.observe(document.documentElement);
+      } catch (e) { /* older engines fall back to the events below */ }
+    }
+    /* And a belt-and-braces check on a slow timer, because the failure mode is
+       not "slightly wrong size", it is "the page is unusable and the buttons do
+       not answer". A comparison of two integers once a second is nothing. */
+    this._sizeCheck = setInterval(function () { self.resize(); }, 1000);
   };
 
   var safeProbe = null;
@@ -419,6 +462,10 @@
 
     el.addEventListener('wheel', function (e) {
       e.preventDefault();
+      // ctrl-wheel, and a trackpad pinch, are the browser's zoom rather than
+      // ours — refused above by the preventDefault, and not passed on to the
+      // camera either, because a pinch should not secretly fly you somewhere
+      if (e.ctrlKey) return;
       var f = Math.exp(-e.deltaY * 0.0016);
       self.cam.zt = RDF.clamp(self.cam.zt * f, self.minZoom(), Z_MAX);
     }, { passive: false });
@@ -456,6 +503,37 @@
       self.stick.on = false; self.stick.id = -1; self.stick.mag = 0;
     });
     window.addEventListener('resize', function () { self.resize(); });
+    this._watchViewport();
+
+    /* Keep the browser's own gestures out of a full-screen canvas game.
+
+       Reported from Opera: the page zoomed, the controls stopped answering, and
+       a copy/paste bar appeared over the top. All three are the browser
+       treating a game as a document — page zoom, text selection, the long-press
+       callout. None of them mean anything here: this thing has its own zoom on
+       the scroll wheel and its own controls, and there is no text to select
+       that is not also a button.
+
+       Ctrl-wheel and the trackpad pinch both arrive as a wheel event with
+       ctrlKey set, and both can be refused. The keyboard shortcuts cannot be,
+       which is exactly why the viewport observer above matters more than any of
+       this: if a zoom happens anyway, the page reflows and carries on. */
+    el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    el.addEventListener('selectstart', function (e) { e.preventDefault(); });
+    el.addEventListener('dragstart', function (e) { e.preventDefault(); });
+
+    // Safari's pinch gestures, which never become wheel events
+    ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (g) {
+      document.addEventListener(g, function (e) { e.preventDefault(); }, { passive: false });
+    });
+
+    // a second tap in quick succession is a zoom on some engines; not here
+    var lastTap = 0;
+    document.addEventListener('touchend', function (e) {
+      var now = Date.now();
+      if (now - lastTap < 320) e.preventDefault();
+      lastTap = now;
+    }, { passive: false });
   };
 
   Engine.prototype.flyTo = function (x, y, cb) {

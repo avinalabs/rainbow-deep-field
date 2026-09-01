@@ -79,10 +79,14 @@ function check(name, ok, detail) {
 
   const crisp = await page.evaluate(() => {
     const cv = document.getElementById('sky');
+    const de = document.documentElement;
     const e = window.__E;
     const out = [];
+    /* Drive the VIEWPORT to a fractional height, not the canvas — the canvas is
+       pinned to an exact size and reads the viewport to decide what that size
+       should be, so forcing the canvas would be testing nothing. */
     for (const h of [844, 659.5, 739.297, 660.0001]) {
-      cv.style.height = h + 'px';
+      de.style.height = h + 'px';
       e.resize();
       const r = cv.getBoundingClientRect();
       out.push({
@@ -92,8 +96,7 @@ function check(name, ok, detail) {
         dpr: e.dpr
       });
     }
-    cv.style.height = '';
-    cv.style.width = '';
+    de.style.height = '';
     e.resize();
     return out;
   });

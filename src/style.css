@@ -12,8 +12,30 @@
 html,body{height:100%;margin:0;background:#03030a;color:var(--ink);
   font-family:var(--sans);-webkit-font-smoothing:antialiased;overscroll-behavior:none}
 body{overflow:hidden;touch-action:none}
-canvas#sky{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:crosshair;
-  touch-action:none}
+
+/* This is a game on a canvas, not a document.
+
+   Reported from Opera: a copy/paste bar kept appearing over the top of it.
+   That is the text-selection callout — a long press anywhere selects a label
+   or a button caption and the browser offers to copy it, which is meaningless
+   here and covers the thing you are playing. Selection and the callout are
+   turned off everywhere EXCEPT the places you genuinely type into, because
+   turning them off in a textarea would make the message box unusable. */
+html,body,canvas#sky,.hud,.stats,.bar,.leave,.hint,.keys,.milestone,.carry,
+.chase,.pocket,.sheet .lede,.sheet h1,.sheet h2,.sheet .eyebrow,.sheet .micro,
+button,kbd{
+  -webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;
+  -webkit-touch-callout:none;
+  -webkit-tap-highlight-color:transparent}
+input,textarea,#permalink,#msg{
+  -webkit-user-select:text;-moz-user-select:text;-ms-user-select:text;user-select:text;
+  -webkit-touch-callout:default}
+
+/* The canvas is sized in JavaScript to an exact multiple of the device pixel
+   ratio — see Engine.prototype.resize — so it carries explicit width and
+   height. These are the fallback for the moment before the first resize runs. */
+canvas#sky{position:fixed;top:0;left:0;width:100%;height:100%;display:block;
+  cursor:crosshair;touch-action:none}
 .hidden{opacity:0!important;pointer-events:none!important}
 button{font-family:inherit;color:inherit;cursor:pointer}
 
